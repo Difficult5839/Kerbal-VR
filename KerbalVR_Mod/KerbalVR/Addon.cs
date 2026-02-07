@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
@@ -49,6 +50,13 @@ namespace KerbalVR
 
 			KeyCode toggleKey = GameSettings.CAMERA_NEXT.primary.code;
 			bool toggleRequiresModifier = true;
+			float renderScale = RenderScaleController.ManualScale;
+			bool dynamicRenderScale = RenderScaleController.DynamicEnabled;
+			float dynamicRenderScaleMin = RenderScaleController.MinScale;
+			float dynamicRenderScaleMax = RenderScaleController.MaxScale;
+			float dynamicRenderScaleTargetFps = RenderScaleController.TargetFps;
+			float dynamicRenderScaleStepDown = 0.08f;
+			float dynamicRenderScaleStepUp = 0.04f;
 
 			var settingsNode = GameDatabase.Instance.GetConfigs("KerbalVRConfig").FirstOrDefault();
 
@@ -62,14 +70,31 @@ namespace KerbalVR
 				{
 					bool.TryParse(toggleRequiresModifierString, out toggleRequiresModifier);
 				}
+
+				TryGetFloat(settingsNode.config, "renderScale", ref renderScale);
+				TryGetBool(settingsNode.config, "dynamicRenderScale", ref dynamicRenderScale);
+				TryGetFloat(settingsNode.config, "dynamicRenderScaleMin", ref dynamicRenderScaleMin);
+				TryGetFloat(settingsNode.config, "dynamicRenderScaleMax", ref dynamicRenderScaleMax);
+				TryGetFloat(settingsNode.config, "dynamicRenderScaleTargetFps", ref dynamicRenderScaleTargetFps);
+				TryGetFloat(settingsNode.config, "dynamicRenderScaleStepDown", ref dynamicRenderScaleStepDown);
+				TryGetFloat(settingsNode.config, "dynamicRenderScaleStepUp", ref dynamicRenderScaleStepUp);
 			}
 
 			m_vrToggleKey = toggleKey;
 			m_toggleRequiresModifier = toggleRequiresModifier;
 			m_vrToggle = new KeyBinding(toggleKey);
+			RenderScaleController.Configure(
+				renderScale,
+				dynamicRenderScale,
+				dynamicRenderScaleMin,
+				dynamicRenderScaleMax,
+				dynamicRenderScaleTargetFps,
+				dynamicRenderScaleStepDown,
+				dynamicRenderScaleStepUp);
 
 			string toggleDescription = m_toggleRequiresModifier ? $"{GetModifierKeyLabel()}+{m_vrToggleKey}" : $"{m_vrToggleKey}";
 			Utils.Log($"VR toggle hotkey configured: {toggleDescription}");
+			Utils.Log($"Dynamic render scale configured: enabled={RenderScaleController.DynamicEnabled}, baseScale={RenderScaleController.ManualScale:0.00}, min={RenderScaleController.MinScale:0.00}, max={RenderScaleController.MaxScale:0.00}, targetFps={(RenderScaleController.TargetFps <= 0f ? "auto" : RenderScaleController.TargetFps.ToString("0.0", CultureInfo.InvariantCulture))}");
 		}
 
 		private static void ApplyPatches()
@@ -89,6 +114,8 @@ namespace KerbalVR
 			{
 				PostModifierHint();
 			}
+
+			RenderScaleController.Update();
 		}
 
 		internal static void ToggleVrRunningState(string source)
@@ -159,6 +186,34 @@ namespace KerbalVR
 			catch
 			{
 				return "Modifier";
+			}
+		}
+
+		static void TryGetBool(ConfigNode config, string key, ref bool value)
+		{
+			string raw = null;
+			if (!config.TryGetValue(key, ref raw))
+			{
+				return;
+			}
+
+			if (bool.TryParse(raw, out bool parsed))
+			{
+				value = parsed;
+			}
+		}
+
+		static void TryGetFloat(ConfigNode config, string key, ref float value)
+		{
+			string raw = null;
+			if (!config.TryGetValue(key, ref raw))
+			{
+				return;
+			}
+
+			if (float.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
+			{
+				value = parsed;
 			}
 		}
 

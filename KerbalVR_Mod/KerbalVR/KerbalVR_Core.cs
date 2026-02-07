@@ -101,6 +101,7 @@ namespace KerbalVR
 					}
 				}
 
+				RenderScaleController.OnVrRunningChanged(running);
 				UISystem.Instance.VRRunningChanged(running);
 			}
 		}
