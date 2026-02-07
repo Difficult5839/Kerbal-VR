@@ -157,14 +157,14 @@ namespace KerbalVR
 
 		private static void OnChangeHeadsetOnAction(SteamVR_Action_Boolean fromAction, SteamVR_Input_Sources fromSource, bool newState)
 		{
+			isHeadsetOn = newState;
+
 			if (!newState)
 			{
 				vrRunningDesired = false;
 			}
-			if (newState && HighLogic.LoadedSceneIsFlight)
-			{
-				vrRunningDesired = true;
-			}
+
+			// Keep VR off by default until the user explicitly toggles it on.
 			UpdateVrRunning();
 			// TODO: fix camera orientations
 		}
