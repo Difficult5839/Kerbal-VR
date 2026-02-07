@@ -1,2 +1,5 @@
 .vscode
 .vs
+.nix-nuget-packages
+dist
+KerbalVR_Mod/KerbalVR_Mod.props.user

@@ -13,6 +13,9 @@ namespace KerbalVR
 	public class FirstPersonKerbalAddon : MonoBehaviour
 	{
 		static KeyBinding m_vrToggle = new KeyBinding(KeyCode.V);
+		static KeyCode m_vrToggleKey = KeyCode.V;
+		static bool m_toggleRequiresModifier = true;
+		static float m_nextModifierHintTime = 0f;
 		static public Vector3 kerbalEyePosition = new Vector3(0, 0.7f, 0);
 
 		public void Awake()
@@ -45,6 +48,7 @@ namespace KerbalVR
 			Utils.Log("ModuleManagerPostLoad");
 
 			KeyCode toggleKey = GameSettings.CAMERA_NEXT.primary.code;
+			bool toggleRequiresModifier = true;
 
 			var settingsNode = GameDatabase.Instance.GetConfigs("KerbalVRConfig").FirstOrDefault();
 
@@ -52,9 +56,20 @@ namespace KerbalVR
 			{
 				settingsNode.config.TryGetValue(nameof(kerbalEyePosition), ref kerbalEyePosition);
 				settingsNode.config.TryGetEnum<KeyCode>("toggleKey", ref toggleKey, toggleKey);
+
+				string toggleRequiresModifierString = null;
+				if (settingsNode.config.TryGetValue("toggleRequiresModifier", ref toggleRequiresModifierString))
+				{
+					bool.TryParse(toggleRequiresModifierString, out toggleRequiresModifier);
+				}
 			}
 
+			m_vrToggleKey = toggleKey;
+			m_toggleRequiresModifier = toggleRequiresModifier;
 			m_vrToggle = new KeyBinding(toggleKey);
+
+			string toggleDescription = m_toggleRequiresModifier ? $"{GetModifierKeyLabel()}+{m_vrToggleKey}" : $"{m_vrToggleKey}";
+			Utils.Log($"VR toggle hotkey configured: {toggleDescription}");
 		}
 
 		private static void ApplyPatches()
@@ -66,9 +81,84 @@ namespace KerbalVR
 
 		public void LateUpdate()
 		{
-			if (m_vrToggle.GetKeyDown() && GameSettings.MODIFIER_KEY.GetKey())
+			if (IsToggleHotkeyPressed())
 			{
-				KerbalVR.Core.SetVrRunningDesired(!KerbalVR.Core.IsVrRunning);
+				ToggleVrRunningState("hotkey");
+			}
+			else if (m_toggleRequiresModifier && m_vrToggle.GetKeyDown())
+			{
+				PostModifierHint();
+			}
+		}
+
+		internal static void ToggleVrRunningState(string source)
+		{
+			SetVrRunningState(!Core.IsVrRunning, source);
+		}
+
+		internal static void SetVrRunningState(bool running, string source)
+		{
+			if (!Core.IsVrEnabled)
+			{
+				Utils.PostScreenMessage("VR is not enabled. Check KerbalVR installation.");
+				return;
+			}
+
+			bool initialRunning = Core.IsVrRunning;
+			Core.SetVrRunningDesired(running);
+
+			if (Core.IsVrRunning != initialRunning)
+			{
+				Utils.PostScreenMessage(Core.IsVrRunning ? "VR enabled" : "VR disabled");
+			}
+			else if (running != Core.IsVrRunning)
+			{
+				Utils.PostScreenMessage("VR toggle requested, but no state change occurred.");
+			}
+
+			Utils.Log($"VR state request from {source}: requested={running}, initial={initialRunning}, current={Core.IsVrRunning}, scene={HighLogic.LoadedScene}");
+		}
+
+		static bool IsToggleHotkeyPressed()
+		{
+			if (!m_vrToggle.GetKeyDown())
+			{
+				return false;
+			}
+
+			if (!m_toggleRequiresModifier)
+			{
+				return true;
+			}
+
+			return IsModifierPressed();
+		}
+
+		static bool IsModifierPressed()
+		{
+			return GameSettings.MODIFIER_KEY.GetKey() || Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+		}
+
+		static void PostModifierHint()
+		{
+			if (Time.unscaledTime < m_nextModifierHintTime)
+			{
+				return;
+			}
+
+			m_nextModifierHintTime = Time.unscaledTime + 2f;
+			Utils.PostScreenMessage($"Press {GetModifierKeyLabel()}+{m_vrToggleKey} to toggle VR");
+		}
+
+		static string GetModifierKeyLabel()
+		{
+			try
+			{
+				return GameSettings.MODIFIER_KEY.primary.code.ToString();
+			}
+			catch
+			{
+				return "Modifier";
 			}
 		}
 
@@ -125,7 +215,7 @@ namespace KerbalVR
 		{
 			public static bool Prefix()
 			{
-				if (m_vrToggle.GetKeyDown() && GameSettings.MODIFIER_KEY.GetKey())
+				if (IsToggleHotkeyPressed())
 				{
 					return false;
 				}
