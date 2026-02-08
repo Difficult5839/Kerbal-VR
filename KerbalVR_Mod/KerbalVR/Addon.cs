@@ -18,6 +18,51 @@ namespace KerbalVR
 		static bool m_toggleRequiresModifier = true;
 		static float m_nextModifierHintTime = 0f;
 		static public Vector3 kerbalEyePosition = new Vector3(0, 0.7f, 0);
+		const float KeyboardYawRotationSpeedDegPerSecond = 60f;
+		const float ViewHeightOffsetMin = -2f;
+		const float ViewHeightOffsetMax = 2f;
+		static float m_viewHeightOffset = 0f;
+		static float m_viewYawOffsetDegrees = 0f;
+		static bool m_keyboardViewRotationEnabled = false;
+
+		internal static float ViewHeightOffset
+		{
+			get => m_viewHeightOffset;
+			set
+			{
+				m_viewHeightOffset = Mathf.Clamp(value, ViewHeightOffsetMin, ViewHeightOffsetMax);
+				ApplyCurrentKerbalEyePosition();
+			}
+		}
+
+		internal static bool KeyboardViewRotationEnabled
+		{
+			get => m_keyboardViewRotationEnabled;
+			set => m_keyboardViewRotationEnabled = value;
+		}
+
+		internal static float ViewYawOffsetDegrees => m_viewYawOffsetDegrees;
+
+		internal static void ResetViewYawOffset()
+		{
+			m_viewYawOffsetDegrees = 0f;
+		}
+
+		internal static Vector3 GetConfiguredKerbalEyePosition()
+		{
+			return kerbalEyePosition + Vector3.up * m_viewHeightOffset;
+		}
+
+		internal static void ApplyCurrentKerbalEyePosition()
+		{
+			var cameraManager = CameraManager.Instance;
+			if (!Core.IsVrRunning || !Scene.IsInIVA() || cameraManager?.IVACameraActiveKerbal == null)
+			{
+				return;
+			}
+
+			cameraManager.IVACameraActiveKerbal.eyeTransform.localPosition = GetConfiguredKerbalEyePosition();
+		}
 
 		public void Awake()
 		{
@@ -57,6 +102,8 @@ namespace KerbalVR
 			float dynamicRenderScaleTargetFps = RenderScaleController.TargetFps;
 			float dynamicRenderScaleStepDown = 0.08f;
 			float dynamicRenderScaleStepUp = 0.04f;
+			float viewHeightOffset = ViewHeightOffset;
+			bool keyboardViewRotationEnabled = KeyboardViewRotationEnabled;
 
 			var settingsNode = GameDatabase.Instance.GetConfigs("KerbalVRConfig").FirstOrDefault();
 
@@ -78,11 +125,16 @@ namespace KerbalVR
 				TryGetFloat(settingsNode.config, "dynamicRenderScaleTargetFps", ref dynamicRenderScaleTargetFps);
 				TryGetFloat(settingsNode.config, "dynamicRenderScaleStepDown", ref dynamicRenderScaleStepDown);
 				TryGetFloat(settingsNode.config, "dynamicRenderScaleStepUp", ref dynamicRenderScaleStepUp);
+				TryGetFloat(settingsNode.config, "viewHeightOffset", ref viewHeightOffset);
+				TryGetBool(settingsNode.config, "keyboardViewRotationEnabled", ref keyboardViewRotationEnabled);
 			}
 
 			m_vrToggleKey = toggleKey;
 			m_toggleRequiresModifier = toggleRequiresModifier;
 			m_vrToggle = new KeyBinding(toggleKey);
+			ViewHeightOffset = viewHeightOffset;
+			KeyboardViewRotationEnabled = keyboardViewRotationEnabled;
+			ResetViewYawOffset();
 			RenderScaleController.Configure(
 				renderScale,
 				dynamicRenderScale,
@@ -95,6 +147,7 @@ namespace KerbalVR
 			string toggleDescription = m_toggleRequiresModifier ? $"{GetModifierKeyLabel()}+{m_vrToggleKey}" : $"{m_vrToggleKey}";
 			Utils.Log($"VR toggle hotkey configured: {toggleDescription}");
 			Utils.Log($"Dynamic render scale configured: enabled={RenderScaleController.DynamicEnabled}, baseScale={RenderScaleController.ManualScale:0.00}, min={RenderScaleController.MinScale:0.00}, max={RenderScaleController.MaxScale:0.00}, targetFps={(RenderScaleController.TargetFps <= 0f ? "auto" : RenderScaleController.TargetFps.ToString("0.0", CultureInfo.InvariantCulture))}");
+			Utils.Log($"View adjustments configured: heightOffset={ViewHeightOffset:0.000}, keyboardViewRotationEnabled={KeyboardViewRotationEnabled}");
 		}
 
 		private static void ApplyPatches()
@@ -115,6 +168,7 @@ namespace KerbalVR
 				PostModifierHint();
 			}
 
+			UpdateKeyboardViewRotation();
 			RenderScaleController.Update();
 		}
 
@@ -164,6 +218,32 @@ namespace KerbalVR
 		static bool IsModifierPressed()
 		{
 			return GameSettings.MODIFIER_KEY.GetKey() || Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+		}
+
+		static void UpdateKeyboardViewRotation()
+		{
+			if (!m_keyboardViewRotationEnabled || !Core.IsVrRunning || !Scene.IsInIVA())
+			{
+				return;
+			}
+
+			float rotationInput = 0f;
+			if (Input.GetKey(KeyCode.Q))
+			{
+				rotationInput -= 1f;
+			}
+			if (Input.GetKey(KeyCode.E))
+			{
+				rotationInput += 1f;
+			}
+
+			if (Mathf.Abs(rotationInput) < Mathf.Epsilon)
+			{
+				return;
+			}
+
+			m_viewYawOffsetDegrees += rotationInput * KeyboardYawRotationSpeedDegPerSecond * Time.unscaledDeltaTime;
+			m_viewYawOffsetDegrees = Mathf.Repeat(m_viewYawOffsetDegrees + 180f, 360f) - 180f;
 		}
 
 		static void PostModifierHint()

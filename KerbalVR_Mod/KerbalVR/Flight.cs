@@ -601,7 +601,7 @@ namespace KerbalVR
 		{
 			if (KerbalVR.Core.IsVrRunning)
 			{
-				kerbal.eyeTransform.localPosition = FirstPersonKerbalAddon.kerbalEyePosition;
+				kerbal.eyeTransform.localPosition = FirstPersonKerbalAddon.GetConfiguredKerbalEyePosition();
 			}
 
 			FirstPersonKerbalFlight.Instance.OnIVACameraKerbalChange();

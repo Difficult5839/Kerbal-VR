@@ -7,9 +7,12 @@ namespace KerbalVR
 	{
 		const float AbsoluteMinScale = 0.5f;
 		const float AbsoluteMaxScale = 1.5f;
+		const float AbsoluteSceneScaleMin = 0.1f;
+		const float AbsoluteSceneScaleMax = 4.0f;
 		const float MinTargetFps = 30f;
 		const float MaxTargetFps = 144f;
 		const float DefaultTargetFps = 60f;
+		const float DefaultNonVrScale = 1f;
 		const float FpsHysteresis = 2f;
 		const float FpsSmoothingFactor = 0.1f;
 		const float AdjustIntervalSeconds = 0.35f;
@@ -27,6 +30,7 @@ namespace KerbalVR
 		static float m_smoothedFrameTime = 1f / DefaultTargetFps;
 		static float m_smoothedFps = DefaultTargetFps;
 		static float m_adjustTimer;
+		static float m_nonVrScale = DefaultNonVrScale;
 
 		public static bool DynamicEnabled
 		{
@@ -34,7 +38,7 @@ namespace KerbalVR
 			set
 			{
 				m_dynamicEnabled = value;
-				if (!m_dynamicEnabled)
+				if (!m_dynamicEnabled && Core.IsVrRunning)
 				{
 					ApplyRenderScale(m_manualScale);
 				}
@@ -118,6 +122,7 @@ namespace KerbalVR
 			m_targetFps = targetFps <= 0f ? 0f : Mathf.Clamp(targetFps, MinTargetFps, MaxTargetFps);
 			m_stepDown = Mathf.Clamp(stepDown, 0.005f, 0.25f);
 			m_stepUp = Mathf.Clamp(stepUp, 0.005f, 0.25f);
+			m_nonVrScale = GetValidSceneScale(SteamVR_Camera.sceneResolutionScale, m_nonVrScale);
 		}
 
 		public static void OnVrRunningChanged(bool running)
@@ -126,8 +131,13 @@ namespace KerbalVR
 
 			if (!running)
 			{
+				m_initialized = false;
+				ApplySceneResolutionScale(m_nonVrScale);
 				return;
 			}
+
+			// Capture current desktop scale so we can restore it when VR is turned off.
+			m_nonVrScale = GetValidSceneScale(SteamVR_Camera.sceneResolutionScale, m_nonVrScale);
 
 			m_initialized = false;
 			EnsureInitialized();
@@ -197,11 +207,7 @@ namespace KerbalVR
 			m_smoothedFrameTime = 1f / Mathf.Max(1f, targetFps);
 			m_smoothedFps = targetFps;
 
-			float configuredScale = SteamVR_Camera.sceneResolutionScale;
-			if (configuredScale <= 0f)
-			{
-				configuredScale = m_manualScale;
-			}
+			float configuredScale = GetValidSceneScale(SteamVR_Camera.sceneResolutionScale, m_manualScale);
 
 			m_currentScale = Mathf.Clamp(configuredScale, m_minScale, m_maxScale);
 			m_initialized = true;
@@ -209,7 +215,12 @@ namespace KerbalVR
 
 		static void ApplyRenderScale(float scale)
 		{
-			float clampedScale = Mathf.Clamp(scale, m_minScale, m_maxScale);
+			ApplySceneResolutionScale(Mathf.Clamp(scale, m_minScale, m_maxScale));
+		}
+
+		static void ApplySceneResolutionScale(float scale)
+		{
+			float clampedScale = Mathf.Clamp(scale, AbsoluteSceneScaleMin, AbsoluteSceneScaleMax);
 			if (Mathf.Abs(clampedScale - m_lastAppliedScale) < 0.001f)
 			{
 				return;
@@ -218,6 +229,16 @@ namespace KerbalVR
 			SteamVR_Camera.sceneResolutionScale = clampedScale;
 			m_lastAppliedScale = clampedScale;
 			m_currentScale = clampedScale;
+		}
+
+		static float GetValidSceneScale(float scale, float fallback)
+		{
+			if (scale > 0f && !float.IsNaN(scale) && !float.IsInfinity(scale))
+			{
+				return Mathf.Clamp(scale, AbsoluteSceneScaleMin, AbsoluteSceneScaleMax);
+			}
+
+			return Mathf.Clamp(fallback, AbsoluteSceneScaleMin, AbsoluteSceneScaleMax);
 		}
 
 		static float ResolveTargetFps()

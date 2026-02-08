@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using KSP.UI.Screens;
 using UnityEngine;
@@ -8,7 +9,7 @@ namespace KerbalVR
 	public class KerbalVRToolbar : MonoBehaviour
 	{
 		const float WindowWidth = 320f;
-		const float WindowHeight = 275f;
+		const float WindowHeight = 430f;
 		const float SliderScaleMin = 0.5f;
 		const float SliderScaleMax = 1.5f;
 
@@ -20,6 +21,8 @@ namespace KerbalVR
 		bool m_windowPositionInitialized;
 		Rect m_settingsWindowRect = new Rect(0f, 0f, WindowWidth, WindowHeight);
 		readonly int m_settingsWindowId = typeof(KerbalVRToolbar).GetHashCode();
+		string m_heightOffsetInput = "0";
+		string m_heightOffsetError;
 
 		void Awake()
 		{
@@ -43,9 +46,15 @@ namespace KerbalVR
 
 		void Update()
 		{
+			if (m_showSettingsWindow && HighLogic.LoadedScene != GameScenes.FLIGHT)
+			{
+				m_showSettingsWindow = false;
+				SyncButtonSelection();
+			}
+
 			if (m_toggleButton != null && m_lastRunningState != Core.IsVrRunning)
 			{
-				SetButtonState(Core.IsVrRunning);
+				SetButtonIcon(Core.IsVrRunning);
 			}
 		}
 
@@ -57,7 +66,7 @@ namespace KerbalVR
 			}
 
 			EnsureWindowRect();
-			m_settingsWindowRect = GUILayout.Window(m_settingsWindowId, m_settingsWindowRect, DrawSettingsWindow, "KerbalVR Render Scale");
+			m_settingsWindowRect = GUILayout.Window(m_settingsWindowId, m_settingsWindowRect, DrawSettingsWindow, "KerbalVR Settings");
 			ClampWindowToScreen();
 		}
 
@@ -97,7 +106,8 @@ namespace KerbalVR
 				ApplicationLauncher.AppScenes.FLIGHT,
 				defaultIcon);
 
-			SetButtonState(Core.IsVrRunning);
+			SetButtonIcon(Core.IsVrRunning);
+			SyncButtonSelection();
 		}
 
 		void RemoveButton()
@@ -130,7 +140,7 @@ namespace KerbalVR
 			}
 		}
 
-		void SetButtonState(bool running)
+		void SetButtonIcon(bool running)
 		{
 			if (m_toggleButton == null)
 			{
@@ -143,7 +153,17 @@ namespace KerbalVR
 				m_toggleButton.SetTexture(icon);
 			}
 
-			if (running)
+			m_lastRunningState = running;
+		}
+
+		void SyncButtonSelection()
+		{
+			if (m_toggleButton == null)
+			{
+				return;
+			}
+
+			if (m_showSettingsWindow)
 			{
 				m_toggleButton.SetTrue(false);
 			}
@@ -151,28 +171,25 @@ namespace KerbalVR
 			{
 				m_toggleButton.SetFalse(false);
 			}
-
-			m_lastRunningState = running;
 		}
 
 		void OnToggleEnabled()
 		{
-			FirstPersonKerbalAddon.SetVrRunningState(true, "toolbar");
-			SetButtonState(Core.IsVrRunning);
 			OpenSettingsWindow();
 		}
 
 		void OnToggleDisabled()
 		{
-			FirstPersonKerbalAddon.SetVrRunningState(false, "toolbar");
-			SetButtonState(Core.IsVrRunning);
-			OpenSettingsWindow();
+			m_showSettingsWindow = false;
+			SyncButtonSelection();
 		}
 
 		void OpenSettingsWindow()
 		{
 			m_showSettingsWindow = true;
+			SyncHeightOffsetInput();
 			EnsureWindowRect();
+			SyncButtonSelection();
 		}
 
 		void EnsureWindowRect()
@@ -234,6 +251,49 @@ namespace KerbalVR
 				}
 			}
 
+			GUILayout.Space(8f);
+			GUILayout.Label("View Adjustment");
+
+			GUILayout.BeginHorizontal();
+			GUILayout.Label("Height offset (m):", GUILayout.Width(108f));
+			string heightOffsetInputNew = GUILayout.TextField(m_heightOffsetInput, GUILayout.Width(68f));
+			if (heightOffsetInputNew != m_heightOffsetInput)
+			{
+				m_heightOffsetInput = heightOffsetInputNew;
+				m_heightOffsetError = null;
+			}
+
+			if (GUILayout.Button("Apply", GUILayout.Width(60f)))
+			{
+				ApplyHeightOffsetInput();
+			}
+			if (GUILayout.Button("Reset", GUILayout.Width(60f)))
+			{
+				FirstPersonKerbalAddon.ViewHeightOffset = 0f;
+				SyncHeightOffsetInput();
+			}
+			GUILayout.EndHorizontal();
+
+			GUILayout.Label($"Current height offset: {FirstPersonKerbalAddon.ViewHeightOffset:+0.000;-0.000;0.000} m");
+			if (!string.IsNullOrEmpty(m_heightOffsetError))
+			{
+				GUILayout.Label(m_heightOffsetError);
+			}
+
+			bool keyboardRotateEnabled = FirstPersonKerbalAddon.KeyboardViewRotationEnabled;
+			bool keyboardRotateEnabledNew = GUILayout.Toggle(keyboardRotateEnabled, "Enable Q/E view rotation");
+			if (keyboardRotateEnabledNew != keyboardRotateEnabled)
+			{
+				FirstPersonKerbalAddon.KeyboardViewRotationEnabled = keyboardRotateEnabledNew;
+			}
+
+			GUILayout.Label("Q = rotate left, E = rotate right");
+			GUILayout.Label($"Current yaw offset: {FirstPersonKerbalAddon.ViewYawOffsetDegrees:+0.0;-0.0;0.0}\u00b0");
+			if (GUILayout.Button("Reset View Rotation"))
+			{
+				FirstPersonKerbalAddon.ResetViewYawOffset();
+			}
+
 			GUILayout.Space(6f);
 			GUILayout.Label($"Current scale: {RenderScaleController.CurrentRenderScale:0.00}x");
 			GUILayout.Label($"Smoothed FPS: {RenderScaleController.SmoothedFps:0.0}");
@@ -242,12 +302,13 @@ namespace KerbalVR
 			if (GUILayout.Button(Core.IsVrRunning ? "Disable VR" : "Enable VR"))
 			{
 				FirstPersonKerbalAddon.SetVrRunningState(!Core.IsVrRunning, "toolbar-window");
-				SetButtonState(Core.IsVrRunning);
+				SetButtonIcon(Core.IsVrRunning);
 			}
 
 			if (GUILayout.Button("Close"))
 			{
 				m_showSettingsWindow = false;
+				SyncButtonSelection();
 			}
 			GUILayout.EndHorizontal();
 
@@ -262,6 +323,24 @@ namespace KerbalVR
 			{
 				setter(newValue);
 			}
+		}
+
+		void ApplyHeightOffsetInput()
+		{
+			if (!float.TryParse(m_heightOffsetInput, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed))
+			{
+				m_heightOffsetError = "Invalid number (use e.g. 0.05).";
+				return;
+			}
+
+			FirstPersonKerbalAddon.ViewHeightOffset = parsed;
+			SyncHeightOffsetInput();
+		}
+
+		void SyncHeightOffsetInput()
+		{
+			m_heightOffsetInput = FirstPersonKerbalAddon.ViewHeightOffset.ToString("0.###", CultureInfo.InvariantCulture);
+			m_heightOffsetError = null;
 		}
 	}
 }

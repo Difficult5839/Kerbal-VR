@@ -183,8 +183,17 @@ namespace KerbalVR
 			// copy the camera wobble offsets to the parent transform since it can't drive the transform that is controlled by the VR rig
 			if (Core.IsVrRunning && Scene.IsInIVA())
 			{
-				__instance.transform.parent.localPosition = __instance.transform.localPosition;
-				__instance.transform.parent.localRotation = __instance.transform.localRotation;
+				Transform anchorTransform = __instance.transform.parent;
+				if (anchorTransform == null)
+				{
+					return;
+				}
+
+				FirstPersonKerbalAddon.ApplyCurrentKerbalEyePosition();
+
+				anchorTransform.localPosition = __instance.transform.localPosition;
+				Quaternion viewRotationOffset = Quaternion.Euler(0f, FirstPersonKerbalAddon.ViewYawOffsetDegrees, 0f);
+				anchorTransform.localRotation = viewRotationOffset * __instance.transform.localRotation;
 				__instance.transform.localPosition = Vector3.zero;
 				__instance.transform.localRotation = Quaternion.identity;
 			}
