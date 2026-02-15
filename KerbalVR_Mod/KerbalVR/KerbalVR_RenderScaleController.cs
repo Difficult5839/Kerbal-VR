@@ -30,7 +30,10 @@ namespace KerbalVR
 		static float m_smoothedFrameTime = 1f / DefaultTargetFps;
 		static float m_smoothedFps = DefaultTargetFps;
 		static float m_adjustTimer;
+		static bool m_adaptiveUpdatesActive;
 		static float m_nonVrScale = DefaultNonVrScale;
+		static bool m_hasNonVrScaleSnapshot;
+		static bool m_nonVrScaleSampledFromAdaptive;
 
 		public static bool DynamicEnabled
 		{
@@ -122,7 +125,11 @@ namespace KerbalVR
 			m_targetFps = targetFps <= 0f ? 0f : Mathf.Clamp(targetFps, MinTargetFps, MaxTargetFps);
 			m_stepDown = Mathf.Clamp(stepDown, 0.005f, 0.25f);
 			m_stepUp = Mathf.Clamp(stepUp, 0.005f, 0.25f);
-			m_nonVrScale = GetValidSceneScale(SteamVR_Camera.sceneResolutionScale, m_nonVrScale);
+			m_adaptiveUpdatesActive = Core.IsVrRunning;
+			if (!Core.IsVrRunning)
+			{
+				CaptureNonVrScaleSnapshot(SteamVR_Camera.sceneResolutionScale, sampledFromActiveVrAdaptive: false);
+			}
 		}
 
 		public static void OnVrRunningChanged(bool running)
@@ -132,17 +139,19 @@ namespace KerbalVR
 			if (!running)
 			{
 				m_initialized = false;
-				ApplySceneResolutionScale(m_nonVrScale);
+				m_adaptiveUpdatesActive = false;
+				ApplySceneResolutionScale(ResolveNonVrRestoreScale());
 				return;
 			}
 
-			// Capture current desktop scale so we can restore it when VR is turned off.
-			m_nonVrScale = GetValidSceneScale(SteamVR_Camera.sceneResolutionScale, m_nonVrScale);
+			// Capture desktop baseline before VR writes its own scale for this session.
+			CaptureNonVrScaleSnapshot(SteamVR_Camera.sceneResolutionScale, sampledFromActiveVrAdaptive: m_adaptiveUpdatesActive && m_dynamicEnabled);
 
 			m_initialized = false;
 			EnsureInitialized();
 
 			ApplyRenderScale(m_manualScale);
+			m_adaptiveUpdatesActive = true;
 		}
 
 		public static void Update()
@@ -150,6 +159,10 @@ namespace KerbalVR
 			if (!Core.IsVrEnabled || !Core.IsVrRunning)
 			{
 				m_adjustTimer = 0f;
+				return;
+			}
+			if (!m_adaptiveUpdatesActive)
+			{
 				return;
 			}
 
@@ -239,6 +252,23 @@ namespace KerbalVR
 			}
 
 			return Mathf.Clamp(fallback, AbsoluteSceneScaleMin, AbsoluteSceneScaleMax);
+		}
+
+		static void CaptureNonVrScaleSnapshot(float sampledScale, bool sampledFromActiveVrAdaptive)
+		{
+			m_nonVrScale = GetValidSceneScale(sampledScale, DefaultNonVrScale);
+			m_hasNonVrScaleSnapshot = true;
+			m_nonVrScaleSampledFromAdaptive = sampledFromActiveVrAdaptive;
+		}
+
+		static float ResolveNonVrRestoreScale()
+		{
+			if (!m_hasNonVrScaleSnapshot || m_nonVrScaleSampledFromAdaptive)
+			{
+				return DefaultNonVrScale;
+			}
+
+			return GetValidSceneScale(m_nonVrScale, DefaultNonVrScale);
 		}
 
 		static float ResolveTargetFps()
