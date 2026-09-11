@@ -1,4 +1,4 @@
-﻿
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -281,7 +281,10 @@ namespace KerbalVR
 				// for some reason, the kerbal scale is sometimes 2.03, which makes the interaction system operate at a larger scale and makes the world appear smaller
 				// try to invert the scale here - but maybe it would be better if we just attached the VRAnchor to the internal model directly instead of the kerbal?
 				Vector3 eyeScale = eyeTransform.lossyScale;
-				anchorTransform.localScale = new Vector3(1.0f / eyeScale.x, 1.0f / eyeScale.y, 1.0f / eyeScale.z);
+
+				float ivaWorldScale = HandProfileManager.Instance.ivaWorldScale;
+				if (ivaWorldScale <= 0.0f) ivaWorldScale = 1.0f;
+				anchorTransform.localScale = new Vector3(ivaWorldScale / eyeScale.x, ivaWorldScale / eyeScale.y, ivaWorldScale / eyeScale.z);
 
 				InternalCamera.Instance.transform.localScale = Vector3.one;
 				KerbalVR.InteractionSystem.Instance.transform.localScale = Vector3.one;
@@ -318,7 +321,15 @@ namespace KerbalVR
 
 			if (!Core.IsVrEnabled) return;
 
-			KerbalVR.InteractionSystem.Instance.transform.SetParent(FlightCamera.fetch.transform, false);
+			// Create a VR anchor for the FlightCamera and scale it by evaWorldScale so the EVA
+			// world can be scaled relative to the hands (mirrors the IVA ivaWorldScale fix).
+			var anchorTransform = CameraUtils.CreateVRAnchor(FlightCamera.fetch.mainCamera).transform;
+			Vector3 camScale = anchorTransform.lossyScale;
+			float evaWorldScale = HandProfileManager.Instance.evaWorldScale;
+			if (evaWorldScale <= 0.0f) evaWorldScale = 1.0f;
+			anchorTransform.localScale = new Vector3(evaWorldScale / camScale.x, evaWorldScale / camScale.y, evaWorldScale / camScale.z);
+
+			KerbalVR.InteractionSystem.Instance.transform.SetParent(anchorTransform, false);
 
 			Utils.GetOrAddComponent<KerbalVR_ArmScaler>(kerbalEVA.gameObject);
 
@@ -601,7 +612,7 @@ namespace KerbalVR
 		{
 			if (KerbalVR.Core.IsVrRunning)
 			{
-				kerbal.eyeTransform.localPosition = FirstPersonKerbalAddon.GetConfiguredKerbalEyePosition();
+				kerbal.eyeTransform.localPosition = FirstPersonKerbalAddon.kerbalEyePosition;
 			}
 
 			FirstPersonKerbalFlight.Instance.OnIVACameraKerbalChange();
