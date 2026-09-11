@@ -1,4 +1,4 @@
-﻿using KSPDev.ConfigUtils;
+using KSPDev.ConfigUtils;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -64,6 +64,11 @@ namespace KerbalVR
 
 		[PersistentField("HandProfile/fullRangeOfMotion")]
 		public bool fullRangeOfMotion;
+
+		[PersistentField("HandProfile/ivaWorldScale")]
+		public float ivaWorldScale = 1;
+		[PersistentField("HandProfile/evaWorldScale")]
+		public float evaWorldScale = 1;
 
 		[PersistentField("HandProfile/skeletonPrefabNameRight")]
 		public string skeletonPrefabNameRight;
