@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -157,6 +157,7 @@ namespace InstallCheck
 					new Version(0, 880, 2, 0), // VR patch on volumetrics V4
 					new Version(0, 900, 1, 0), // VR patch on volumetrics V5
 					new Version(0, 902, 0, 0), // later release of volumetrics V5
+					new Version(0, 903, 0, 0), // later-er release of volumetrics V5
 				},
 				new Dictionary<Version, string>()
 				{
@@ -180,6 +181,8 @@ namespace InstallCheck
 					new Version(2, 2, 1, 0), // volclouds v3
 					new Version(2, 3, 3, 1), // VR patch on volclouds v4
 					new Version(3, 1, 0, 0), // volumetrics V5 (works fine)
+					new Version(3, 1, 1, 0), // volumetrics V5 minor fixes
+					new Version(3, 1, 2, 0),
 				},
 				new Dictionary<Version, string>()
 				{
